@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>GM Quick Stat Roller</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font: 14px/1.4 system-ui, sans-serif; margin: 12px; }
+    h3 { margin: 0 0 8px; }
+    .row { display: flex; gap: 8px; margin: 8px 0; align-items: center; }
+    button { padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
+    .muted { color: #666; font-size: 12px; }
+    input[type=number]{ width: 80px; padding: 6px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+    .full { grid-column: 1 / -1; }
+  </style>
+</head>
+<body>
+  <h3>GM Quick Stat Roller</h3>
+  <div class="muted">Results post as a local (GM-only) note + notification.</div>
+
+  <div class="grid" style="margin-top:10px">
+    <button id="weak">Weak Mob (3d6)</button>
+    <button id="strong">Strong Mob (4d6)</button>
+    <button id="threat">Threatening (5d6)</button>
+
+    <div class="row full">
+      <label for="bbegLevel"><b>BBEG</b> LVL HP bonus (extra d6 per level):</label>
+      <input id="bbegLevel" type="number" min="0" step="1" value="0" />
+      <button id="bbeg">Roll BBEG (6d6 drop lowest)</button>
+    </div>
+  </div>
+
+  <div class="muted" style="margin-top:8px">
+    ATK/Mod mapping by total:<br/>
+    1–11 d4, 12–13 d6, 14–15 d8, 16–17 d10, 18 d12
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
