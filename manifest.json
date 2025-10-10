@@ -1,20 +1,15 @@
 {
-  "manifest_version": 1,
   "name": "GM Quick Stat Roller",
   "version": "1.0.0",
-  "author": "you",
+  "manifest_version": 1,
   "description": "One-click GM-only mob stat roller",
-  "homepage_url": "https://your-host.example.com/",
-  "action": [
-    {
-      "id": "gm-quick-stat-roller",
-      "icon": "icon.svg",
-      "title": "GM Quick Roller",
-      "popover": {
-        "url": "index.html",
-        "width": 420,
-        "height": 360
-      }
-    }
-  ]
+  "author": "you",
+  "homepage_url": "https://github.com/quackmage/OBRMobRoller",
+  "action": {
+    "title": "GM Quick Roller",
+    "icon": "icon.svg",
+    "popover": "index.html",
+    "width": 420,
+    "height": 360
+  }
 }
