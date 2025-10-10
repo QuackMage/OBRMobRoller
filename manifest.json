@@ -3,12 +3,11 @@
   "version": "1.0.0",
   "manifest_version": 1,
   "description": "One-click GM-only mob stat roller",
-  "author": "you",
-  "homepage_url": "https://github.com/quackmage/OBRMobRoller",
+  "author": "quackmage",
   "action": {
     "title": "GM Quick Roller",
-    "icon": "icon.svg",
-    "popover": "index.html",
+    "icon": "/icon.svg",
+    "popover": "/index.html",
     "width": 420,
     "height": 360
   }
