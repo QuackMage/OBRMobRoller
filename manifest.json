@@ -5,7 +5,7 @@
   "author": "you",
   "description": "One-click GM-only mob stat roller",
   "homepage_url": "https://your-host.example.com/",
-  "actions": [
+  "action": [
     {
       "id": "gm-quick-stat-roller",
       "icon": "icon.svg",
