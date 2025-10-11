@@ -6,8 +6,8 @@
   "author": "quackmage",
   "action": {
     "title": "GM Quick Roller",
-    "icon": "https://quackmage.github.io/OBRMobRoller/icon.svg",
-    "popover": "https://quackmage.github.io/OBRMobRoller/index.html",
+    "icon": "https://cdn.jsdelivr.net/gh/QuackMage/OBRMobRoller@main/icon.svg",
+    "popover": "https://cdn.jsdelivr.net/gh/QuackMage/OBRMobRoller@main/index.html",
     "width": 420,
     "height": 360
   }
