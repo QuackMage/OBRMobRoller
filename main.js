@@ -22,11 +22,6 @@ const roll6d6DropLowest = () => {
 
 const mapAtkDie = (t) => (t <= 11 ? 4 : t <= 13 ? 6 : t <= 15 ? 8 : t <= 17 ? 10 : 12);
 
-const fmtRolls = (tag, r) =>
-  r.kept
-    ? `${tag}: [${r.rolls.join(", ")}] drop ${r.dropped} = ${r.total}`
-    : `${tag}: [${r.rolls.join(", ")}] = ${r.total}`;
-
 // ---------- Guards ----------
 async function requireGM() {
   const role = await OBR.player.getRole();
@@ -36,7 +31,7 @@ async function requireGM() {
   }
 }
 
-// ---------- Viewport center (try best effort; not required for fallback) ----------
+// ---------- Viewport center (best effort; not required if builder missing) ----------
 async function getViewportCenterSafe() {
   try {
     if (OBR.viewport && typeof OBR.viewport.getBounds === "function") {
@@ -52,10 +47,8 @@ async function getViewportCenterSafe() {
 }
 
 // ---------- Writer with graceful fallback ----------
-async function writeLocalTextOrNotify(lines) {
-  const text = lines.join("\n");
-
-  // If local text builder exists, use it
+async function writeLocalTextOrNotify(text) {
+  // If local text builder exists, try to place a GM-only note
   const hasBuilder = !!(OBR.scene?.local && typeof OBR.scene.local.buildText === "function");
 
   if (hasBuilder) {
@@ -80,92 +73,51 @@ async function writeLocalTextOrNotify(lines) {
         .build();
 
       await OBR.scene.local.addItems([item]); // GM-only local item
-
       if (center.x === 0 && center.y === 0) {
-        await OBR.notification.show(
-          "GM-only note placed at (0,0). Pan to top-left if you don't see it.",
-          "INFO"
-        );
+        await OBR.notification.show("GM-only note placed at (0,0). Pan to top-left if not visible.", "INFO");
       } else {
         await OBR.notification.show("GM-only roll created.", "SUCCESS");
       }
       return;
     } catch (err) {
       console.warn("Local text add failed; falling back to notification:", err);
-      // Fall through to notification output
     }
   } else {
     console.warn("OBR.scene.local.buildText is not available; using notification output.");
   }
 
-  // Fallback: show full result as a (GM-only) notification
-  // Split into smaller chunks if very long to avoid truncation
-  const chunks = chunkText(text, 350); // conservative length
-  for (const c of chunks) {
-    await OBR.notification.show(c, "SUCCESS");
-  }
+  // Fallback: show compact result as a GM-only notification
+  await OBR.notification.show(text, "SUCCESS");
 }
 
-// Utility to chunk long strings for multiple notifications
-function chunkText(str, maxLen) {
-  if (str.length <= maxLen) return [str];
-  const out = [];
-  let i = 0;
-  while (i < str.length) {
-    out.push(str.slice(i, i + maxLen));
-    i += maxLen;
-  }
-  return out;
+// ---------- Compact format builders ----------
+function formatCompact(label, desc, hpTotal, acTotal, atkSides, modSides) {
+  return `=== ${label} (${desc}) === HP: ${hpTotal} AC: ${acTotal} ATK: d${atkSides} Mod: +d${modSides}`;
 }
 
-// ---------- Roll packages ----------
-function rollPackage(nd6, label) {
+function buildCompactForNd6(nd6, label) {
   const hp = rollNd6(nd6);
   const ac = rollNd6(nd6);
   const atkSeed = rollNd6(nd6);
   const modSeed = rollNd6(nd6);
 
   const atkSides = mapAtkDie(atkSeed.total);
-  const atkVal = d(atkSides);
   const modSides = mapAtkDie(modSeed.total);
-  const modVal = d(modSides);
 
-  return [
-    `=== ${label} ===`,
-    fmtRolls("HP", hp),
-    fmtRolls("AC", ac),
-    fmtRolls("ATK Seed", atkSeed) + ` → d${atkSides} = ${atkVal}`,
-    fmtRolls("Mod Seed", modSeed) + ` → +d${modSides} = ${modVal}`,
-    `ATK Total: ${atkVal + modVal}`,
-  ];
+  return formatCompact(label, `${nd6}d6`, hp.total, ac.total, atkSides, modSides);
 }
 
-function rollBBEG(levelBonus) {
+function buildCompactForBBEG(levelBonus) {
   const hp = roll6d6DropLowest();
   const ac = roll6d6DropLowest();
   const atkSeed = roll6d6DropLowest();
   const modSeed = roll6d6DropLowest();
 
   const atkSides = mapAtkDie(atkSeed.total);
-  const atkVal = d(atkSides);
   const modSides = mapAtkDie(modSeed.total);
-  const modVal = d(modSides);
 
-  let bonusText = "";
-  if (levelBonus > 0) {
-    const rolls = Array.from({ length: levelBonus }, () => d(6));
-    const total = rolls.reduce((a, b) => a + b, 0);
-    bonusText = `  + [${rolls.join(", ")}] = ${hp.total + total}`;
-  }
-
-  return [
-    `=== BBEG (6d6 drop lowest) ===`,
-    fmtRolls("HP", hp) + bonusText,
-    fmtRolls("AC", ac),
-    fmtRolls("ATK Seed", atkSeed) + ` → d${atkSides} = ${atkVal}`,
-    fmtRolls("Mod Seed", modSeed) + ` → +d${modSides} = ${modVal}`,
-    `ATK Total: ${atkVal + modVal}`,
-  ];
+  const bonusDesc = levelBonus > 0 ? ` + ${levelBonus}d6 HP` : "";
+  return formatCompact("BBEG", `6d6 drop lowest${bonusDesc}`, hp.total, ac.total, atkSides, modSides);
 }
 
 // ---------- Wire buttons ----------
@@ -174,42 +126,34 @@ function wire() {
 
   el("weak")?.addEventListener("click", async () => {
     try {
-      console.log("Weak clicked");
-      await OBR.notification.show("Weak clicked", "INFO");
       await requireGM();
-      const lines = rollPackage(3, "Weak Mob (3d6)");
-      await writeLocalTextOrNotify(lines);
+      const out = buildCompactForNd6(3, "Weak Mob");
+      await writeLocalTextOrNotify(out);
     } catch (e) { console.warn(e); }
   });
 
   el("strong")?.addEventListener("click", async () => {
     try {
-      console.log("Strong clicked");
-      await OBR.notification.show("Strong clicked", "INFO");
       await requireGM();
-      const lines = rollPackage(4, "Strong Mob (4d6)");
-      await writeLocalTextOrNotify(lines);
+      const out = buildCompactForNd6(4, "Strong Mob");
+      await writeLocalTextOrNotify(out);
     } catch (e) { console.warn(e); }
   });
 
   el("threat")?.addEventListener("click", async () => {
     try {
-      console.log("Threatening clicked");
-      await OBR.notification.show("Threatening clicked", "INFO");
       await requireGM();
-      const lines = rollPackage(5, "Threatening Mob (5d6)");
-      await writeLocalTextOrNotify(lines);
+      const out = buildCompactForNd6(5, "Threatening Mob");
+      await writeLocalTextOrNotify(out);
     } catch (e) { console.warn(e); }
   });
 
   el("bbeg")?.addEventListener("click", async () => {
     try {
-      console.log("BBEG clicked");
-      await OBR.notification.show("BBEG clicked", "INFO");
       await requireGM();
       const lvl = parseInt(el("bbegLevel")?.value ?? "0", 10) || 0;
-      const lines = rollBBEG(lvl);
-      await writeLocalTextOrNotify(lines);
+      const out = buildCompactForBBEG(lvl);
+      await writeLocalTextOrNotify(out);
     } catch (e) { console.warn(e); }
   });
 }
