@@ -1,43 +1,37 @@
 import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk/dist/obr.min.js";
 
-function rollDie(sides) {
-  return Math.floor(Math.random() * sides) + 1;
-}
-function rollNd6(n) {
-  const rolls = Array.from({ length: n }, () => rollDie(6));
-  const total = rolls.reduce((a, b) => a + b, 0);
-  return { rolls, total };
-}
-function roll6d6DropLowest() {
-  const rolls = Array.from({ length: 6 }, () => rollDie(6));
+const el = (id) => document.getElementById(id);
+
+// ---- Dice helpers ----
+const d = (sides) => Math.floor(Math.random() * sides) + 1;
+const rollNd6 = (n) => { const rolls = Array.from({length:n}, ()=>d(6)); return { rolls, total: rolls.reduce((a,b)=>a+b,0) }; };
+const roll6d6DropLowest = () => {
+  const rolls = Array.from({length:6}, ()=>d(6));
   const sorted = [...rolls].sort((a,b)=>a-b);
   const dropped = sorted[0];
   const kept = sorted.slice(1);
-  const total = kept.reduce((a,b)=>a+b,0);
-  return { rolls, kept, dropped, total };
-}
-function mapAtkDie(total) {
-  if (total <= 11) return 4;
-  if (total <= 13) return 6;
-  if (total <= 15) return 8;
-  if (total <= 17) return 10;
-  return 12; // 18+
-}
-function fmtRolls(tag, r) {
-  if (r.kept) return `${tag}: [${r.rolls.join(", ")}] drop ${r.dropped} = ${r.total}`;
-  return `${tag}: [${r.rolls.join(", ")}] = ${r.total}`;
-}
+  return { rolls, kept, dropped, total: kept.reduce((a,b)=>a+b,0) };
+};
+const mapAtkDie = (t) => (t<=11?4:t<=13?6:t<=15?8:t<=17?10:12);
+const fmtRolls = (tag, r) => r.kept
+  ? `${tag}: [${r.rolls.join(", ")}] drop ${r.dropped} = ${r.total}`
+  : `${tag}: [${r.rolls.join(", ")}] = ${r.total}`;
 
-async function ensureGM() {
+// ---- Guards ----
+async function requireGMAndScene() {
   const role = await OBR.player.getRole();
   if (role !== "GM") {
     await OBR.notification.show("Only the GM can use this roller.", "WARNING");
     throw new Error("Not GM");
   }
+  const sceneId = await OBR.scene.getId();
+  if (!sceneId) {
+    await OBR.notification.show("Open a scene first to place the GM-only note.", "WARNING");
+    throw new Error("No scene");
+  }
 }
 
 async function writeLocalText(lines) {
-  // Position near the current viewport center
   const view = await OBR.viewport.getViewport();
   const pos = { x: view.center.x, y: view.center.y };
   const text = lines.join("\n");
@@ -49,39 +43,36 @@ async function writeLocalText(lines) {
     .fontFamily("monospace")
     .fontSize(14)
     .padding(8)
-    .fillColor("#111")
-    .strokeColor("#fff")
-    .strokeWidth(0)
+    .fillColor("#111")       // panel background
+    .textColor("#ffffff")    // make sure text is visible
     .textAlign("LEFT")
     .position(pos)
     .build();
 
-  await OBR.scene.local.addItems([item]); // GM-only
+  await OBR.scene.local.addItems([item]);
   await OBR.notification.show("GM-only roll created.", "SUCCESS");
 }
 
+// ---- Roll packages ----
 function rollPackage(nd6, label) {
   const hp = rollNd6(nd6);
   const ac = rollNd6(nd6);
-  const atkBaseRoll = rollNd6(nd6);
-  const atkModRoll = rollNd6(nd6);
+  const atkSeed = rollNd6(nd6);
+  const modSeed = rollNd6(nd6);
 
-  const atkDieSides = mapAtkDie(atkBaseRoll.total);
-  const atkDieResult = rollDie(atkDieSides);
+  const atkSides = mapAtkDie(atkSeed.total);
+  const atkVal = d(atkSides);
+  const modSides = mapAtkDie(modSeed.total);
+  const modVal = d(modSides);
 
-  const modDieSides = mapAtkDie(atkModRoll.total);
-  const modDieResult = rollDie(modDieSides);
-
-  const lines = [
+  return [
     `=== ${label} ===`,
     fmtRolls("HP", hp),
     fmtRolls("AC", ac),
-    fmtRolls("ATK Seed", atkBaseRoll) + ` → d${atkDieSides} = ${atkDieResult}`,
-    fmtRolls("Mod Seed", atkModRoll) + ` → +d${modDieSides} = ${modDieResult}`,
-    `ATK Total: ${atkDieResult + modDieResult}`,
+    fmtRolls("ATK Seed", atkSeed) + ` → d${atkSides} = ${atkVal}`,
+    fmtRolls("Mod Seed", modSeed) + ` → +d${modSides} = ${modVal}`,
+    `ATK Total: ${atkVal + modVal}`,
   ];
-
-  return lines;
 }
 
 function rollBBEG(levelBonus) {
@@ -90,47 +81,50 @@ function rollBBEG(levelBonus) {
   const atkSeed = roll6d6DropLowest();
   const modSeed = roll6d6DropLowest();
 
-  const atkDieSides = mapAtkDie(atkSeed.total);
-  const atkDieResult = rollDie(atkDieSides);
+  const atkSides = mapAtkDie(atkSeed.total);
+  const atkVal = d(atkSides);
+  const modSides = mapAtkDie(modSeed.total);
+  const modVal = d(modSides);
 
-  const modDieSides = mapAtkDie(modSeed.total);
-  const modDieResult = rollDie(modDieSides);
-
-  // Extra HP: + (levelBonus)d6
-  let hpBonus = { rolls: [], total: 0 };
-  if (levelBonus && levelBonus > 0) {
-    const rolls = Array.from({ length: levelBonus }, () => rollDie(6));
-    hpBonus.rolls = rolls;
-    hpBonus.total = rolls.reduce((a,b)=>a+b,0);
+  let bonusText = "";
+  if (levelBonus > 0) {
+    const rolls = Array.from({length: levelBonus}, ()=>d(6));
+    const total = rolls.reduce((a,b)=>a+b,0);
+    bonusText = `  + [${rolls.join(", ")}] = ${hp.total + total}`;
   }
 
-  const lines = [
+  return [
     `=== BBEG (6d6 drop lowest) ===`,
-    fmtRolls("HP", hp) + (hpBonus.total ? `  + [${hpBonus.rolls.join(", ")}] = ${hp.total + hpBonus.total}` : ""),
+    fmtRolls("HP", hp) + bonusText,
     fmtRolls("AC", ac),
-    fmtRolls("ATK Seed", atkSeed) + ` → d${atkDieSides} = ${atkDieResult}`,
-    fmtRolls("Mod Seed", modSeed) + ` → +d${modDieSides} = ${modDieResult}`,
-    `ATK Total: ${atkDieResult + modDieResult}`,
+    fmtRolls("ATK Seed", atkSeed) + ` → d${atkSides} = ${atkVal}`,
+    fmtRolls("Mod Seed", modSeed) + ` → +d${modSides} = ${modVal}`,
+    `ATK Total: ${atkVal + modVal}`,
   ];
-
-  return lines;
 }
 
-OBR.onReady(async () => {
-  try { await ensureGM(); } catch { return; }
+// ---- Wire buttons whether or not we're GM yet ----
+function wire() {
+  el("weak")?.addEventListener("click", async () => {
+    try { await requireGMAndScene(); await writeLocalText(rollPackage(3, "Weak Mob (3d6)")); }
+    catch (e) { /* handled via notifications */ }
+  });
+  el("strong")?.addEventListener("click", async () => {
+    try { await requireGMAndScene(); await writeLocalText(rollPackage(4, "Strong Mob (4d6)")); }
+    catch (e) {}
+  });
+  el("threat")?.addEventListener("click", async () => {
+    try { await requireGMAndScene(); await writeLocalText(rollPackage(5, "Threatening Mob (5d6)")); }
+    catch (e) {}
+  });
+  el("bbeg")?.addEventListener("click", async () => {
+    try {
+      await requireGMAndScene();
+      const lvl = parseInt(el("bbegLevel")?.value ?? "0", 10) || 0;
+      await writeLocalText(rollBBEG(lvl));
+    } catch (e) {}
+  });
+}
 
-  // Wire buttons
-  document.getElementById("weak").addEventListener("click", async () => {
-    await writeLocalText(rollPackage(3, "Weak Mob (3d6)"));
-  });
-  document.getElementById("strong").addEventListener("click", async () => {
-    await writeLocalText(rollPackage(4, "Strong Mob (4d6)"));
-  });
-  document.getElementById("threat").addEventListener("click", async () => {
-    await writeLocalText(rollPackage(5, "Threatening Mob (5d6)"));
-  });
-  document.getElementById("bbeg").addEventListener("click", async () => {
-    const lvl = parseInt(document.getElementById("bbegLevel").value, 10) || 0;
-    await writeLocalText(rollBBEG(lvl));
-  });
-});
+// Ensure SDK is ready, then wire
+OBR.onReady(wire);
