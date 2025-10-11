@@ -1,5 +1,5 @@
 // main.js
-import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk/dist/obr.min.js";
+import OBR from "https://unpkg.com/@owlbear-rodeo/sdk/dist/obr.min.js";
 
 const el = (id) => document.getElementById(id);
 
