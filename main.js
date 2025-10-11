@@ -36,63 +36,86 @@ async function requireGM() {
   }
 }
 
-// ---------- Viewport center (robust across SDKs) ----------
+// ---------- Viewport center (try best effort; not required for fallback) ----------
 async function getViewportCenterSafe() {
-  // Try modern bounds API (if present)
-  if (OBR.viewport && typeof OBR.viewport.getBounds === "function") {
-    const b = await OBR.viewport.getBounds(); // expected { x, y, width, height }
-    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
-  }
-
-  // Try older camera/view APIs (if present)
-  if (OBR.camera && typeof OBR.camera.getView === "function") {
-    const v = await OBR.camera.getView(); // expected { position: { x, y }, zoom }
-    if (v?.position) return { x: v.position.x, y: v.position.y };
-  }
-
-  // If nothing available, fall back to origin
+  try {
+    if (OBR.viewport && typeof OBR.viewport.getBounds === "function") {
+      const b = await OBR.viewport.getBounds();
+      return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    }
+    if (OBR.camera && typeof OBR.camera.getView === "function") {
+      const v = await OBR.camera.getView();
+      if (v?.position) return { x: v.position.x, y: v.position.y };
+    }
+  } catch (_) { /* ignore */ }
   return { x: 0, y: 0 };
 }
 
-// ---------- Writer (handles no-viewport / no-scene gracefully) ----------
-async function writeLocalText(lines) {
-  try {
-    const center = await getViewportCenterSafe();
-    const jitter = (n) => Math.floor(Math.random() * n) - n / 2; // -n/2..+n/2
-    const pos = { x: center.x + jitter(40), y: center.y + jitter(40) };
-    const text = lines.join("\n");
+// ---------- Writer with graceful fallback ----------
+async function writeLocalTextOrNotify(lines) {
+  const text = lines.join("\n");
 
-    const item = OBR.scene.local
-      .buildText()
-      .plainText(text)
-      .width("AUTO")
-      .fontFamily("monospace")
-      .fontSize(20)
-      .padding(10)
-      .fillColor("#111111")
-      .textColor("#ffffff")
-      .strokeColor("#ffffff")
-      .strokeWidth(2)
-      .textAlign("LEFT")
-      .position(pos)
-      .build();
+  // If local text builder exists, use it
+  const hasBuilder = !!(OBR.scene?.local && typeof OBR.scene.local.buildText === "function");
 
-    await OBR.scene.local.addItems([item]); // GM-only local item
+  if (hasBuilder) {
+    try {
+      const center = await getViewportCenterSafe();
+      const jitter = (n) => Math.floor(Math.random() * n) - n / 2;
+      const pos = { x: center.x + jitter(40), y: center.y + jitter(40) };
 
-    // If we had to fall back to origin, tell the user where it went
-    if (center.x === 0 && center.y === 0) {
-      await OBR.notification.show(
-        "GM-only note placed at scene origin (0,0). Pan to top-left if not visible.",
-        "INFO"
-      );
-    } else {
-      await OBR.notification.show("GM-only roll created.", "SUCCESS");
+      const item = OBR.scene.local
+        .buildText()
+        .plainText(text)
+        .width("AUTO")
+        .fontFamily("monospace")
+        .fontSize(20)
+        .padding(10)
+        .fillColor("#111111")
+        .textColor("#ffffff")
+        .strokeColor("#ffffff")
+        .strokeWidth(2)
+        .textAlign("LEFT")
+        .position(pos)
+        .build();
+
+      await OBR.scene.local.addItems([item]); // GM-only local item
+
+      if (center.x === 0 && center.y === 0) {
+        await OBR.notification.show(
+          "GM-only note placed at (0,0). Pan to top-left if you don't see it.",
+          "INFO"
+        );
+      } else {
+        await OBR.notification.show("GM-only roll created.", "SUCCESS");
+      }
+      return;
+    } catch (err) {
+      console.warn("Local text add failed; falling back to notification:", err);
+      // Fall through to notification output
     }
-  } catch (err) {
-    console.warn("Failed to add local text:", err);
-    await OBR.notification.show("Open a scene first to place the GM-only note.", "WARNING");
-    throw err;
+  } else {
+    console.warn("OBR.scene.local.buildText is not available; using notification output.");
   }
+
+  // Fallback: show full result as a (GM-only) notification
+  // Split into smaller chunks if very long to avoid truncation
+  const chunks = chunkText(text, 350); // conservative length
+  for (const c of chunks) {
+    await OBR.notification.show(c, "SUCCESS");
+  }
+}
+
+// Utility to chunk long strings for multiple notifications
+function chunkText(str, maxLen) {
+  if (str.length <= maxLen) return [str];
+  const out = [];
+  let i = 0;
+  while (i < str.length) {
+    out.push(str.slice(i, i + maxLen));
+    i += maxLen;
+  }
+  return out;
 }
 
 // ---------- Roll packages ----------
@@ -155,8 +178,7 @@ function wire() {
       await OBR.notification.show("Weak clicked", "INFO");
       await requireGM();
       const lines = rollPackage(3, "Weak Mob (3d6)");
-      await writeLocalText(lines);
-      await OBR.notification.show(lines.join(" | "), "SUCCESS");
+      await writeLocalTextOrNotify(lines);
     } catch (e) { console.warn(e); }
   });
 
@@ -166,8 +188,7 @@ function wire() {
       await OBR.notification.show("Strong clicked", "INFO");
       await requireGM();
       const lines = rollPackage(4, "Strong Mob (4d6)");
-      await writeLocalText(lines);
-      await OBR.notification.show(lines.join(" | "), "SUCCESS");
+      await writeLocalTextOrNotify(lines);
     } catch (e) { console.warn(e); }
   });
 
@@ -177,8 +198,7 @@ function wire() {
       await OBR.notification.show("Threatening clicked", "INFO");
       await requireGM();
       const lines = rollPackage(5, "Threatening Mob (5d6)");
-      await writeLocalText(lines);
-      await OBR.notification.show(lines.join(" | "), "SUCCESS");
+      await writeLocalTextOrNotify(lines);
     } catch (e) { console.warn(e); }
   });
 
@@ -189,8 +209,7 @@ function wire() {
       await requireGM();
       const lvl = parseInt(el("bbegLevel")?.value ?? "0", 10) || 0;
       const lines = rollBBEG(lvl);
-      await writeLocalText(lines);
-      await OBR.notification.show(lines.join(" | "), "SUCCESS");
+      await writeLocalTextOrNotify(lines);
     } catch (e) { console.warn(e); }
   });
 }
