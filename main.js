@@ -1,23 +1,28 @@
+// main.js
 import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk/dist/obr.min.js";
 
 const el = (id) => document.getElementById(id);
 
-// ---- Dice helpers ----
+// --- Dice helpers ---
 const d = (sides) => Math.floor(Math.random() * sides) + 1;
-const rollNd6 = (n) => { const rolls = Array.from({length:n}, ()=>d(6)); return { rolls, total: rolls.reduce((a,b)=>a+b,0) }; };
+const rollNd6 = (n) => {
+  const rolls = Array.from({ length: n }, () => d(6));
+  return { rolls, total: rolls.reduce((a, b) => a + b, 0) };
+};
 const roll6d6DropLowest = () => {
-  const rolls = Array.from({length:6}, ()=>d(6));
-  const sorted = [...rolls].sort((a,b)=>a-b);
+  const rolls = Array.from({ length: 6 }, () => d(6));
+  const sorted = [...rolls].sort((a, b) => a - b);
   const dropped = sorted[0];
   const kept = sorted.slice(1);
-  return { rolls, kept, dropped, total: kept.reduce((a,b)=>a+b,0) };
+  return { rolls, kept, dropped, total: kept.reduce((a, b) => a + b, 0) };
 };
-const mapAtkDie = (t) => (t<=11?4:t<=13?6:t<=15?8:t<=17?10:12);
-const fmtRolls = (tag, r) => r.kept
-  ? `${tag}: [${r.rolls.join(", ")}] drop ${r.dropped} = ${r.total}`
-  : `${tag}: [${r.rolls.join(", ")}] = ${r.total}`;
+const mapAtkDie = (t) => (t <= 11 ? 4 : t <= 13 ? 6 : t <= 15 ? 8 : t <= 17 ? 10 : 12);
+const fmtRolls = (tag, r) =>
+  r.kept
+    ? `${tag}: [${r.rolls.join(", ")}] drop ${r.dropped} = ${r.total}`
+    : `${tag}: [${r.rolls.join(", ")}] = ${r.total}`;
 
-// ---- Guards ----
+// --- Guards ---
 async function requireGMAndScene() {
   const role = await OBR.player.getRole();
   if (role !== "GM") {
@@ -49,11 +54,11 @@ async function writeLocalText(lines) {
     .position(pos)
     .build();
 
-  await OBR.scene.local.addItems([item]);
+  await OBR.scene.local.addItems([item]); // GM-only local item
   await OBR.notification.show("GM-only roll created.", "SUCCESS");
 }
 
-// ---- Roll packages ----
+// --- Roll packages ---
 function rollPackage(nd6, label) {
   const hp = rollNd6(nd6);
   const ac = rollNd6(nd6);
@@ -88,8 +93,8 @@ function rollBBEG(levelBonus) {
 
   let bonusText = "";
   if (levelBonus > 0) {
-    const rolls = Array.from({length: levelBonus}, ()=>d(6));
-    const total = rolls.reduce((a,b)=>a+b,0);
+    const rolls = Array.from({ length: levelBonus }, () => d(6));
+    const total = rolls.reduce((a, b) => a + b, 0);
     bonusText = `  + [${rolls.join(", ")}] = ${hp.total + total}`;
   }
 
@@ -103,27 +108,38 @@ function rollBBEG(levelBonus) {
   ];
 }
 
-// ---- Wire buttons whether or not we're GM yet ----
+// --- Wire buttons (listeners attach even if you open popover before GM) ---
 function wire() {
+  // DEBUG line #1:
+  console.log("Wiring buttons...");
+
   el("weak")?.addEventListener("click", async () => {
-    try { await requireGMAndScene(); await writeLocalText(rollPackage(3, "Weak Mob (3d6)")); }
-    catch (e) { /* notifications already shown */ }
+    try {
+      // DEBUG line #2:
+      console.log("Weak clicked");
+      await OBR.notification.show("Weak clicked", "INFO");
+
+      await requireGMAndScene();
+      await writeLocalText(rollPackage(3, "Weak Mob (3d6)"));
+    } catch {}
   });
+
   el("strong")?.addEventListener("click", async () => {
-    try { await requireGMAndScene(); await writeLocalText(rollPackage(4, "Strong Mob (4d6)")); }
-    catch (e) {}
+    try { await requireGMAndScene(); await writeLocalText(rollPackage(4, "Strong Mob (4d6)")); } catch {}
   });
+
   el("threat")?.addEventListener("click", async () => {
-    try { await requireGMAndScene(); await writeLocalText(rollPackage(5, "Threatening Mob (5d6)")); }
-    catch (e) {}
+    try { await requireGMAndScene(); await writeLocalText(rollPackage(5, "Threatening Mob (5d6)")); } catch {}
   });
+
   el("bbeg")?.addEventListener("click", async () => {
     try {
       await requireGMAndScene();
       const lvl = parseInt(el("bbegLevel")?.value ?? "0", 10) || 0;
       await writeLocalText(rollBBEG(lvl));
-    } catch (e) {}
+    } catch {}
   });
 }
 
+// Ensure SDK is ready, then wire the buttons
 OBR.onReady(wire);
