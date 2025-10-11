@@ -7,19 +7,19 @@
   <style>
     body { font: 14px/1.4 system-ui, sans-serif; margin: 12px; }
     h3 { margin: 0 0 8px; }
-    .row { display: flex; gap: 8px; margin: 8px 0; align-items: center; }
-    button { padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
     .muted { color: #666; font-size: 12px; }
-    input[type=number]{ width: 80px; padding: 6px; }
-    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+    .grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:10px; }
+    .row { display:flex; gap:8px; align-items:center; }
     .full { grid-column: 1 / -1; }
+    button { padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; }
+    input[type=number]{ width: 80px; padding: 6px; }
   </style>
 </head>
 <body>
   <h3>GM Quick Stat Roller</h3>
   <div class="muted">Results post as a local (GM-only) note + notification.</div>
 
-  <div class="grid" style="margin-top:10px">
+  <div class="grid">
     <button id="weak">Weak Mob (3d6)</button>
     <button id="strong">Strong Mob (4d6)</button>
     <button id="threat">Threatening (5d6)</button>
@@ -32,10 +32,11 @@
   </div>
 
   <div class="muted" style="margin-top:8px">
-    ATK/Mod mapping by total:<br/>
+    ATK/Mod mapping by total:
     1–11 d4, 12–13 d6, 14–15 d8, 16–17 d10, 18 d12
   </div>
 
-  <script type="module" src="main.js?v=2"></script>
+  <!-- IMPORTANT: cache-bust the JS when you update it -->
+  <script type="module" src="main.js?v=3"></script>
 </body>
 </html>
