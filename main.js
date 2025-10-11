@@ -43,8 +43,8 @@ async function writeLocalText(lines) {
     .fontFamily("monospace")
     .fontSize(14)
     .padding(8)
-    .fillColor("#111")       // panel background
-    .textColor("#ffffff")    // make sure text is visible
+    .fillColor("#111")
+    .textColor("#ffffff")
     .textAlign("LEFT")
     .position(pos)
     .build();
@@ -107,7 +107,7 @@ function rollBBEG(levelBonus) {
 function wire() {
   el("weak")?.addEventListener("click", async () => {
     try { await requireGMAndScene(); await writeLocalText(rollPackage(3, "Weak Mob (3d6)")); }
-    catch (e) { /* handled via notifications */ }
+    catch (e) { /* notifications already shown */ }
   });
   el("strong")?.addEventListener("click", async () => {
     try { await requireGMAndScene(); await writeLocalText(rollPackage(4, "Strong Mob (4d6)")); }
@@ -126,5 +126,4 @@ function wire() {
   });
 }
 
-// Ensure SDK is ready, then wire
 OBR.onReady(wire);
