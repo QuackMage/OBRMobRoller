@@ -1,14 +1,17 @@
 // main.js
+// Import OBR SDK via CORS-friendly ESM endpoint
 import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
 
 const el = (id) => document.getElementById(id);
 
 // --- Dice helpers ---
 const d = (sides) => Math.floor(Math.random() * sides) + 1;
+
 const rollNd6 = (n) => {
   const rolls = Array.from({ length: n }, () => d(6));
   return { rolls, total: rolls.reduce((a, b) => a + b, 0) };
 };
+
 const roll6d6DropLowest = () => {
   const rolls = Array.from({ length: 6 }, () => d(6));
   const sorted = [...rolls].sort((a, b) => a - b);
@@ -16,51 +19,54 @@ const roll6d6DropLowest = () => {
   const kept = sorted.slice(1);
   return { rolls, kept, dropped, total: kept.reduce((a, b) => a + b, 0) };
 };
+
 const mapAtkDie = (t) => (t <= 11 ? 4 : t <= 13 ? 6 : t <= 15 ? 8 : t <= 17 ? 10 : 12);
+
 const fmtRolls = (tag, r) =>
   r.kept
     ? `${tag}: [${r.rolls.join(", ")}] drop ${r.dropped} = ${r.total}`
     : `${tag}: [${r.rolls.join(", ")}] = ${r.total}`;
 
 // --- Guards ---
-async function requireGMAndScene() {
+async function requireGM() {
   const role = await OBR.player.getRole();
   if (role !== "GM") {
     await OBR.notification.show("Only the GM can use this roller.", "WARNING");
     throw new Error("Not GM");
   }
-  const sceneId = await OBR.scene.getId();
-  if (!sceneId) {
+}
+
+// --- Writer (handles 'no scene' gracefully) ---
+async function writeLocalText(lines) {
+  try {
+    const view = await OBR.viewport.getViewport();
+    const jitter = (n) => Math.floor(Math.random() * n) - n / 2; // -n/2..+n/2
+    const pos = { x: view.center.x + jitter(40), y: view.center.y + jitter(40) };
+    const text = lines.join("\n");
+
+    const item = OBR.scene.local
+      .buildText()
+      .plainText(text)
+      .width("AUTO")
+      .fontFamily("monospace")
+      .fontSize(20)
+      .padding(10)
+      .fillColor("#111111")
+      .textColor("#ffffff")
+      .strokeColor("#ffffff")
+      .strokeWidth(2)
+      .textAlign("LEFT")
+      .position(pos)
+      .build();
+
+    await OBR.scene.local.addItems([item]); // GM-only local item
+    await OBR.notification.show("GM-only roll created.", "SUCCESS");
+  } catch (err) {
+    console.warn("Failed to add local text:", err);
     await OBR.notification.show("Open a scene first to place the GM-only note.", "WARNING");
-    throw new Error("No scene");
+    throw err;
   }
 }
-
-async function writeLocalText(lines) {
-  const view = await OBR.viewport.getViewport();
-  const jitter = (n) => Math.floor(Math.random() * n) - n/2; // -n/2 .. +n/2
-  const pos = { x: view.center.x + jitter(40), y: view.center.y + jitter(40) };
-  const text = lines.join("\n");
-
-  const item = OBR.scene.local
-    .buildText()
-    .plainText(text)
-    .width("AUTO")
-    .fontFamily("monospace")
-    .fontSize(20)            // bigger
-    .padding(10)
-    .fillColor("#111111")    // dark card
-    .textColor("#ffffff")    // white text
-    .strokeColor("#ffffff")  // white border so it pops
-    .strokeWidth(2)
-    .textAlign("LEFT")
-    .position(pos)
-    .build();
-
-  const ids = await OBR.scene.local.addItems([item]); // GM-only
-  console.log("Local text added, ids:", ids);
-}
-
 
 // --- Roll packages ---
 function rollPackage(nd6, label) {
@@ -112,7 +118,7 @@ function rollBBEG(levelBonus) {
   ];
 }
 
-// --- Wire buttons (listeners attach even if you open popover before GM) ---
+// --- Wire buttons (all with toasts + success summary) ---
 function wire() {
   console.log("Wiring buttons...");
 
@@ -120,7 +126,7 @@ function wire() {
     try {
       console.log("Weak clicked");
       await OBR.notification.show("Weak clicked", "INFO");
-      await requireGMAndScene();
+      await requireGM();
       const lines = rollPackage(3, "Weak Mob (3d6)");
       await writeLocalText(lines);
       await OBR.notification.show(lines.join(" | "), "SUCCESS");
@@ -131,7 +137,7 @@ function wire() {
     try {
       console.log("Strong clicked");
       await OBR.notification.show("Strong clicked", "INFO");
-      await requireGMAndScene();
+      await requireGM();
       const lines = rollPackage(4, "Strong Mob (4d6)");
       await writeLocalText(lines);
       await OBR.notification.show(lines.join(" | "), "SUCCESS");
@@ -142,7 +148,7 @@ function wire() {
     try {
       console.log("Threatening clicked");
       await OBR.notification.show("Threatening clicked", "INFO");
-      await requireGMAndScene();
+      await requireGM();
       const lines = rollPackage(5, "Threatening Mob (5d6)");
       await writeLocalText(lines);
       await OBR.notification.show(lines.join(" | "), "SUCCESS");
@@ -153,7 +159,7 @@ function wire() {
     try {
       console.log("BBEG clicked");
       await OBR.notification.show("BBEG clicked", "INFO");
-      await requireGMAndScene();
+      await requireGM();
       const lvl = parseInt(el("bbegLevel")?.value ?? "0", 10) || 0;
       const lines = rollBBEG(lvl);
       await writeLocalText(lines);
@@ -161,7 +167,6 @@ function wire() {
     } catch (e) { console.warn(e); }
   });
 }
-
 
 // Ensure SDK is ready, then wire the buttons
 OBR.onReady(wire);
