@@ -4,7 +4,7 @@ import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
 
 const el = (id) => document.getElementById(id);
 
-// --- Dice helpers ---
+// ---------- Dice helpers ----------
 const d = (sides) => Math.floor(Math.random() * sides) + 1;
 
 const rollNd6 = (n) => {
@@ -27,7 +27,7 @@ const fmtRolls = (tag, r) =>
     ? `${tag}: [${r.rolls.join(", ")}] drop ${r.dropped} = ${r.total}`
     : `${tag}: [${r.rolls.join(", ")}] = ${r.total}`;
 
-// --- Guards ---
+// ---------- Guards ----------
 async function requireGM() {
   const role = await OBR.player.getRole();
   if (role !== "GM") {
@@ -36,12 +36,30 @@ async function requireGM() {
   }
 }
 
-// --- Writer (handles 'no scene' gracefully) ---
+// ---------- Viewport center (robust across SDKs) ----------
+async function getViewportCenterSafe() {
+  // Try modern bounds API (if present)
+  if (OBR.viewport && typeof OBR.viewport.getBounds === "function") {
+    const b = await OBR.viewport.getBounds(); // expected { x, y, width, height }
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  }
+
+  // Try older camera/view APIs (if present)
+  if (OBR.camera && typeof OBR.camera.getView === "function") {
+    const v = await OBR.camera.getView(); // expected { position: { x, y }, zoom }
+    if (v?.position) return { x: v.position.x, y: v.position.y };
+  }
+
+  // If nothing available, fall back to origin
+  return { x: 0, y: 0 };
+}
+
+// ---------- Writer (handles no-viewport / no-scene gracefully) ----------
 async function writeLocalText(lines) {
   try {
-    const view = await OBR.viewport.getViewport();
+    const center = await getViewportCenterSafe();
     const jitter = (n) => Math.floor(Math.random() * n) - n / 2; // -n/2..+n/2
-    const pos = { x: view.center.x + jitter(40), y: view.center.y + jitter(40) };
+    const pos = { x: center.x + jitter(40), y: center.y + jitter(40) };
     const text = lines.join("\n");
 
     const item = OBR.scene.local
@@ -60,7 +78,16 @@ async function writeLocalText(lines) {
       .build();
 
     await OBR.scene.local.addItems([item]); // GM-only local item
-    await OBR.notification.show("GM-only roll created.", "SUCCESS");
+
+    // If we had to fall back to origin, tell the user where it went
+    if (center.x === 0 && center.y === 0) {
+      await OBR.notification.show(
+        "GM-only note placed at scene origin (0,0). Pan to top-left if not visible.",
+        "INFO"
+      );
+    } else {
+      await OBR.notification.show("GM-only roll created.", "SUCCESS");
+    }
   } catch (err) {
     console.warn("Failed to add local text:", err);
     await OBR.notification.show("Open a scene first to place the GM-only note.", "WARNING");
@@ -68,7 +95,7 @@ async function writeLocalText(lines) {
   }
 }
 
-// --- Roll packages ---
+// ---------- Roll packages ----------
 function rollPackage(nd6, label) {
   const hp = rollNd6(nd6);
   const ac = rollNd6(nd6);
@@ -118,7 +145,7 @@ function rollBBEG(levelBonus) {
   ];
 }
 
-// --- Wire buttons (all with toasts + success summary) ---
+// ---------- Wire buttons ----------
 function wire() {
   console.log("Wiring buttons...");
 
