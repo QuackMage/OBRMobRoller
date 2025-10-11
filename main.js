@@ -38,7 +38,8 @@ async function requireGMAndScene() {
 
 async function writeLocalText(lines) {
   const view = await OBR.viewport.getViewport();
-  const pos = { x: view.center.x, y: view.center.y };
+  const jitter = (n) => Math.floor(Math.random() * n) - n/2; // -n/2 .. +n/2
+  const pos = { x: view.center.x + jitter(40), y: view.center.y + jitter(40) };
   const text = lines.join("\n");
 
   const item = OBR.scene.local
@@ -46,17 +47,20 @@ async function writeLocalText(lines) {
     .plainText(text)
     .width("AUTO")
     .fontFamily("monospace")
-    .fontSize(14)
-    .padding(8)
-    .fillColor("#111")
-    .textColor("#ffffff")
+    .fontSize(20)            // bigger
+    .padding(10)
+    .fillColor("#111111")    // dark card
+    .textColor("#ffffff")    // white text
+    .strokeColor("#ffffff")  // white border so it pops
+    .strokeWidth(2)
     .textAlign("LEFT")
     .position(pos)
     .build();
 
-  await OBR.scene.local.addItems([item]); // GM-only local item
-  await OBR.notification.show("GM-only roll created.", "SUCCESS");
+  const ids = await OBR.scene.local.addItems([item]); // GM-only
+  console.log("Local text added, ids:", ids);
 }
+
 
 // --- Roll packages ---
 function rollPackage(nd6, label) {
@@ -110,36 +114,54 @@ function rollBBEG(levelBonus) {
 
 // --- Wire buttons (listeners attach even if you open popover before GM) ---
 function wire() {
-  // DEBUG line #1:
   console.log("Wiring buttons...");
 
   el("weak")?.addEventListener("click", async () => {
     try {
-      // DEBUG line #2:
       console.log("Weak clicked");
       await OBR.notification.show("Weak clicked", "INFO");
-
       await requireGMAndScene();
-      await writeLocalText(rollPackage(3, "Weak Mob (3d6)"));
-    } catch {}
+      const lines = rollPackage(3, "Weak Mob (3d6)");
+      await writeLocalText(lines);
+      await OBR.notification.show(lines.join(" | "), "SUCCESS");
+    } catch (e) { console.warn(e); }
   });
 
   el("strong")?.addEventListener("click", async () => {
-    try { await requireGMAndScene(); await writeLocalText(rollPackage(4, "Strong Mob (4d6)")); } catch {}
+    try {
+      console.log("Strong clicked");
+      await OBR.notification.show("Strong clicked", "INFO");
+      await requireGMAndScene();
+      const lines = rollPackage(4, "Strong Mob (4d6)");
+      await writeLocalText(lines);
+      await OBR.notification.show(lines.join(" | "), "SUCCESS");
+    } catch (e) { console.warn(e); }
   });
 
   el("threat")?.addEventListener("click", async () => {
-    try { await requireGMAndScene(); await writeLocalText(rollPackage(5, "Threatening Mob (5d6)")); } catch {}
+    try {
+      console.log("Threatening clicked");
+      await OBR.notification.show("Threatening clicked", "INFO");
+      await requireGMAndScene();
+      const lines = rollPackage(5, "Threatening Mob (5d6)");
+      await writeLocalText(lines);
+      await OBR.notification.show(lines.join(" | "), "SUCCESS");
+    } catch (e) { console.warn(e); }
   });
 
   el("bbeg")?.addEventListener("click", async () => {
     try {
+      console.log("BBEG clicked");
+      await OBR.notification.show("BBEG clicked", "INFO");
       await requireGMAndScene();
       const lvl = parseInt(el("bbegLevel")?.value ?? "0", 10) || 0;
-      await writeLocalText(rollBBEG(lvl));
-    } catch {}
+      const lines = rollBBEG(lvl);
+      await writeLocalText(lines);
+      await OBR.notification.show(lines.join(" | "), "SUCCESS");
+    } catch (e) { console.warn(e); }
   });
 }
+
 
 // Ensure SDK is ready, then wire the buttons
 OBR.onReady(wire);
